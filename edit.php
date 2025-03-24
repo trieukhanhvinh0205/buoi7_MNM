@@ -33,7 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Hiệu chỉnh sinh viên</title>
+    <title>Chỉnh sửa sinh viên</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -127,7 +127,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
 
     <div class="container">
-        <h2>Hiệu chỉnh thông tin sinh viên</h2>
+        <h2>Chỉnh thông tin sinh viên</h2>
         <form method="post" enctype="multipart/form-data">
             <label>Họ Tên</label>
             <input type="text" name="HoTen" value="<?= $row['HoTen'] ?>" required>
