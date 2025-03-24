@@ -9,6 +9,7 @@ if ($conn->connect_error) {
 
 // Biến chứa thông báo thành công và thông tin chi tiết đăng ký
 $success_message = '';
+$error_message = '';
 $details_message = '';
 
 // Lấy danh sách học phần từ cơ sở dữ liệu
@@ -21,58 +22,68 @@ if (isset($_POST['register'])) {
     if (isset($_SESSION['sinhvien_id'])) {
         $sinhvien_id = $_SESSION['sinhvien_id'];  // Đảm bảo sinh viên đã đăng nhập
 
-        // Kiểm tra số lượng dự kiến của học phần
-        $sql_check_hocphan = "SELECT SoLuongDuKien FROM HocPhan WHERE MaHP = '$hocphan_id'";
-        $hocphan_result = $conn->query($sql_check_hocphan);
-        if ($hocphan_result->num_rows > 0) {
-            $hocphan = $hocphan_result->fetch_assoc();
-            if ($hocphan['SoLuongDuKien'] > 0) {
-                // Thêm vào bảng đăng ký học phần
-                $sql_insert = "INSERT INTO DangKy (MaSV, NgayDK) VALUES ('$sinhvien_id', NOW())";
-                if ($conn->query($sql_insert) === TRUE) {
-                    // Lấy MaDK vừa thêm
-                    $MaDK = $conn->insert_id;
+        // Kiểm tra xem sinh viên đã đăng ký học phần này chưa
+        $sql_check_registration = "SELECT * FROM ChiTietDangKy 
+                                   JOIN DangKy ON ChiTietDangKy.MaDK = DangKy.MaDK
+                                   WHERE DangKy.MaSV = '$sinhvien_id' AND ChiTietDangKy.MaHP = '$hocphan_id'";
+        $registration_result = $conn->query($sql_check_registration);
+        if ($registration_result->num_rows > 0) {
+            // Nếu đã đăng ký học phần này
+            $error_message = "Bạn đã đăng ký học phần này rồi.";
+        } else {
+            // Kiểm tra số lượng dự kiến của học phần
+            $sql_check_hocphan = "SELECT SoLuongDuKien FROM HocPhan WHERE MaHP = '$hocphan_id'";
+            $hocphan_result = $conn->query($sql_check_hocphan);
+            if ($hocphan_result->num_rows > 0) {
+                $hocphan = $hocphan_result->fetch_assoc();
+                if ($hocphan['SoLuongDuKien'] > 0) {
+                    // Thêm vào bảng đăng ký học phần
+                    $sql_insert = "INSERT INTO DangKy (MaSV, NgayDK) VALUES ('$sinhvien_id', NOW())";
+                    if ($conn->query($sql_insert) === TRUE) {
+                        // Lấy MaDK vừa thêm
+                        $MaDK = $conn->insert_id;
 
-                    // Thêm vào bảng ChiTietDangKy
-                    $sql_insert_chitiet = "INSERT INTO ChiTietDangKy (MaDK, MaHP) VALUES ('$MaDK', '$hocphan_id')";
-                    if ($conn->query($sql_insert_chitiet) === TRUE) {
-                        // Cập nhật số lượng dự kiến (giảm đi 1)
-                        $sql_update_hocphan = "UPDATE HocPhan SET SoLuongDuKien = SoLuongDuKien - 1 WHERE MaHP = '$hocphan_id'";
-                        $conn->query($sql_update_hocphan);
+                        // Thêm vào bảng ChiTietDangKy
+                        $sql_insert_chitiet = "INSERT INTO ChiTietDangKy (MaDK, MaHP) VALUES ('$MaDK', '$hocphan_id')";
+                        if ($conn->query($sql_insert_chitiet) === TRUE) {
+                            // Cập nhật số lượng dự kiến (giảm đi 1)
+                            $sql_update_hocphan = "UPDATE HocPhan SET SoLuongDuKien = SoLuongDuKien - 1 WHERE MaHP = '$hocphan_id'";
+                            $conn->query($sql_update_hocphan);
 
-                        // Hiển thị thông tin sinh viên và học phần đã đăng ký thành công
-                        $sql_sinhvien = "SELECT * FROM SinhVien WHERE MaSV='$sinhvien_id'";
-                        $sinhvien = $conn->query($sql_sinhvien)->fetch_assoc();
+                            // Hiển thị thông tin sinh viên và học phần đã đăng ký thành công
+                            $sql_sinhvien = "SELECT * FROM SinhVien WHERE MaSV='$sinhvien_id'";
+                            $sinhvien = $conn->query($sql_sinhvien)->fetch_assoc();
 
-                        $sql_hocphan = "SELECT * FROM HocPhan WHERE MaHP='$hocphan_id'";
-                        $hocphan = $conn->query($sql_hocphan)->fetch_assoc();
+                            $sql_hocphan = "SELECT * FROM HocPhan WHERE MaHP='$hocphan_id'";
+                            $hocphan = $conn->query($sql_hocphan)->fetch_assoc();
 
-                        // Gửi thông báo thành công
-                        $success_message = "Bạn đã đăng ký thành công học phần: " . htmlspecialchars($hocphan['TenHP']) . ".";
+                            // Gửi thông báo thành công
+                            $success_message = "Bạn đã đăng ký thành công học phần: " . htmlspecialchars($hocphan['TenHP']) . ".";
 
-                        // Tạo chi tiết thông tin đăng ký
-                        $details_message = "
-                            <h3>Thông tin Đăng kí</h3>
-                            <p><strong>Mã số sinh viên:</strong> " . htmlspecialchars($sinhvien['MaSV']) . "</p>
-                            <p><strong>Họ Tên Sinh Viên:</strong> " . htmlspecialchars($sinhvien['HoTen']) . "</p>
-                            <p><strong>Ngành học:</strong> " . htmlspecialchars($sinhvien['MaNganh']) . "</p>
-                            <p><strong>Ngày Đăng Ký:</strong> " . date("Y-m-d H:i:s") . "</p>
-                            <p><strong>Tên Học Phần:</strong> " . htmlspecialchars($hocphan['TenHP']) . "</p>
-                            <p><strong>Số lượng dự kiến còn lại:</strong> " . htmlspecialchars($hocphan['SoLuongDuKien'] - 1) . "</p>";
+                            // Tạo chi tiết thông tin đăng ký
+                            $details_message = "
+                                <h3>Thông tin Đăng kí</h3>
+                                <p><strong>Mã số sinh viên:</strong> " . htmlspecialchars($sinhvien['MaSV']) . "</p>
+                                <p><strong>Họ Tên Sinh Viên:</strong> " . htmlspecialchars($sinhvien['HoTen']) . "</p>
+                                <p><strong>Ngành học:</strong> " . htmlspecialchars($sinhvien['MaNganh']) . "</p>
+                                <p><strong>Ngày Đăng Ký:</strong> " . date("Y-m-d H:i:s") . "</p>
+                                <p><strong>Tên Học Phần:</strong> " . htmlspecialchars($hocphan['TenHP']) . "</p>
+                                <p><strong>Số lượng dự kiến còn lại:</strong> " . htmlspecialchars($hocphan['SoLuongDuKien'] - 1) . "</p>";
+                        } else {
+                            echo "Lỗi khi thêm chi tiết đăng ký: " . $conn->error;
+                        }
                     } else {
-                        echo "Lỗi khi thêm chi tiết đăng ký: " . $conn->error;
+                        echo "Lỗi khi thêm đăng ký: " . $conn->error;
                     }
                 } else {
-                    echo "Lỗi khi thêm đăng ký: " . $conn->error;
+                    $error_message = "Học phần đã hết chỗ, không thể đăng ký thêm.";
                 }
             } else {
-                echo "Học phần đã hết chỗ, không thể đăng ký thêm.";
+                $error_message = "Không tìm thấy học phần.";
             }
-        } else {
-            echo "Không tìm thấy học phần.";
         }
     } else {
-        echo "Bạn cần đăng nhập để đăng ký học phần.";
+        $error_message = "Bạn cần đăng nhập để đăng ký học phần.";
     }
 }
 
@@ -179,7 +190,7 @@ if (isset($_POST['save_registration'])) {
             margin-top: 20px;
         }
 
-        .success-message {
+        .success-message, .error-message {
             color: #28a745;
             background-color: #d4edda;
             border: 1px solid #c3e6cb;
@@ -187,6 +198,12 @@ if (isset($_POST['save_registration'])) {
             border-radius: 5px;
             text-align: center;
             margin-bottom: 20px;
+        }
+
+        .error-message {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
         }
 
         .details-message {
@@ -202,33 +219,29 @@ if (isset($_POST['save_registration'])) {
                 width: 90%;
             }
 
-            th, td {
-                font-size: 14px;
-            }
-
-            input[type="submit"] {
-                width: 100%;
+            h2 {
+                font-size: 24px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Danh sách Học Phần</h2>
+        <h2>Danh Sách Học Phần</h2>
 
-        <!-- Hiển thị thông báo thành công nếu có -->
+        <!-- Hiển thị thông báo -->
         <?php if (!empty($success_message)): ?>
-            <div class="success-message">
-                <?php echo $success_message; ?>
-            </div>
+            <div class="success-message"><?php echo $success_message; ?></div>
+        <?php elseif (!empty($error_message)): ?>
+            <div class="error-message"><?php echo $error_message; ?></div>
         <?php endif; ?>
 
-        <!-- Hiển thị chi tiết thông tin đăng ký nếu có -->
+        <!-- Hiển thị thông tin chi tiết đăng ký -->
         <?php if (!empty($details_message)): ?>
             <div class="details-message">
                 <?php echo $details_message; ?>
                 <form method="post" style="text-align: center;">
-                    <button type="submit" name="save_registration">Lưu đăng ký</button>
+                    <button type="submit" name="save_registration">Lưu đăng ký dưới dạng văn bản</button>
                 </form>
             </div>
         <?php endif; ?>
@@ -263,5 +276,6 @@ if (isset($_POST['save_registration'])) {
     </div>
 </body>
 </html>
+
 
 <?php $conn->close(); ?>
